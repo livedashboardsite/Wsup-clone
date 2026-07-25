@@ -2,7 +2,7 @@
 
 A production-grade, real-time WhatsApp clone built for the web. Faithful to the original's design language and packed with the features that make WhatsApp feel like WhatsApp — live messaging, read receipts, presence, typing indicators, group chats, media sharing, and true end-to-end encryption.
 
-> Made under the guidance of **Gujan Mam** at the **Vedam School of Technology** Bootcamp — *"Build a clone of your WhatsApp."*
+> Made under the guidance of **Gunjan Mam** at the **Vedam School of Technology** Bootcamp — *"Build a clone of your WhatsApp."*
 
 ---
 
