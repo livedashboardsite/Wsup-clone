@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { useConversations } from '@/lib/useConversations';
+import { useProfiles } from '@/lib/useProfiles';
 import { usePresenceHeartbeat } from '@/lib/usePresence';
+import { createDirectConversation } from '@/lib/chat';
 import { AuthScreen } from '@/components/AuthScreen';
 import { ChatList } from '@/components/ChatList';
 import { ConversationView } from '@/components/ConversationView';
@@ -15,14 +17,15 @@ type Panel = 'chat' | 'profile' | 'info';
 
 function AppInner() {
   const { profile, loading } = useAuth();
-  const { conversations, loading: convsLoading } = useConversations();
+  const { conversations, loading: convsLoading, refresh } = useConversations();
+  const { profiles } = useProfiles();
   usePresenceHeartbeat();
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>('chat');
   const [showNewChat, setShowNewChat] = useState(false);
+  const [startingId, setStartingId] = useState<string | null>(null);
 
-  // Auto-clear active conversation if it disappears from list
   useEffect(() => {
     if (activeId && !conversations.find((c) => c.id === activeId)) {
       // Keep it active even if list hasn't refreshed yet
@@ -49,6 +52,20 @@ function AppInner() {
     setPanel('chat');
   };
 
+  const handleStartDirect = async (userId: string) => {
+    setStartingId(userId);
+    try {
+      const conv = await createDirectConversation(userId);
+      refresh();
+      setActiveId(conv.id);
+      setPanel('chat');
+    } catch (err) {
+      console.error('start direct chat error:', err);
+    } finally {
+      setStartingId(null);
+    }
+  };
+
   // Mobile: show only one pane at a time
   return (
     <div className="h-screen flex bg-[#f0f2f5] overflow-hidden">
@@ -63,8 +80,11 @@ function AppInner() {
         ) : (
           <ChatList
             conversations={conversations}
+            profiles={profiles}
             activeId={activeId}
             onSelect={(id) => { setActiveId(id); setPanel('chat'); }}
+            onStartDirect={handleStartDirect}
+            startingId={startingId}
             onNewChat={() => setShowNewChat(true)}
             onNewGroup={() => setShowNewChat(true)}
             onProfile={() => setPanel('profile')}
