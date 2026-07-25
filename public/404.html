@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>WhatsApp Web — Glass Edition</title>
+    <script>
+      // GitHub Pages SPA 404 -> hash route redirect
+      (function () {
+        var l = window.location;
+        var redirect = sessionStorage.redirect;
+        delete sessionStorage.redirect;
+        if (redirect && redirect !== l.href) {
+          var rel = redirect.replace(l.origin + '/', '');
+          if (rel && !rel.startsWith('#')) {
+            window.location.replace(l.origin + '/' + l.pathname.split('/').filter(Boolean)[0] + '/#/' + rel);
+          }
+        } else {
+          var pathname = l.pathname.slice(1);
+          if (pathname && !l.hash) {
+            sessionStorage.redirect = l.href;
+            window.location.replace(l.origin + l.pathname.split('/').slice(0, -pathname.split('/').filter(Boolean).length + 1).join('/') + '/#/' + pathname);
+          }
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <h1>Redirecting…</h1>
+  </body>
+</html>

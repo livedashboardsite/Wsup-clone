@@ -1,319 +1,218 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/lib/auth';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  fetchMessages,
-  decryptMessages,
-  markReceipts,
-  updateLastRead,
+  getMessagesForConversation,
+  sendMessage as storeSendMessage,
+  sendImage as storeSendImage,
+  sendVoice as storeSendVoice,
+  sendPoll as storeSendPoll,
+  markConversationRead,
+  updateMessageStatus,
+  incrementUnread,
+  getProfile,
+  getCurrentUser,
+  scheduleAutoReply,
   deleteMessage,
-} from '@/lib/chat';
+  type Message as LocalMessage,
+  type Conversation as LocalConversation,
+  type Theme,
+  type PollData,
+  type VoiceNote,
+  CURRENT_USER_ID,
+} from '@/lib/localStore';
 import { ChatHeader } from './ChatHeader';
 import { MessageBubble } from './MessageBubble';
 import { MessageInput } from './MessageInput';
-import { formatDateSeparator, sameDay, displayName, formatLastSeen } from '@/lib/format';
-import type { ConversationWithMeta, Message, Profile, MessageStatus } from '@/types/database';
+import { formatDateSeparator, sameDay, formatLastSeen, displayName } from '@/lib/format';
+import type { MessageStatus } from '@/types/database';
 
 interface ConversationViewProps {
-  conversation: ConversationWithMeta;
+  conversation: LocalConversation;
   onBack: () => void;
-  onInfo: () => void;
+  theme: Theme;
+  onNewMessage: () => void;
+  onChange: () => void;
+  onCall: (kind: 'voice' | 'video') => void;
 }
 
-type PresenceMap = Record<string, { is_online: boolean; last_seen: string }>;
-type ReceiptMap = Record<string, Record<string, MessageStatus>>;
+export function ConversationView({
+  conversation, onBack, theme, onNewMessage, onChange, onCall,
+}: ConversationViewProps) {
+  const me = getCurrentUser();
+  const otherProfileId = useMemo(
+    () => conversation.member_ids.find((id) => id !== me.id),
+    [conversation.id, me.id]
+  );
+  const otherProfile = useMemo(
+    () => (otherProfileId ? getProfile(otherProfileId) : undefined),
+    [otherProfileId]
+  );
 
-export function ConversationView({ conversation, onBack, onInfo }: ConversationViewProps) {
-  const { profile } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [messages, setMessages] = useState<LocalMessage[]>([]);
+  const [replyTo, setReplyTo] = useState<LocalMessage | null>(null);
   const [typing, setTyping] = useState(false);
-  const [presence, setPresence] = useState<PresenceMap>({});
-  const [receipts, setReceipts] = useState<ReceiptMap>({});
-  const [members, setMembers] = useState<Profile[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const lastReadAt = conversation.members.find((m) => m.user_id === profile?.id)?.last_read_at;
+  const autoReplyPendingRef = useRef<boolean>(false);
 
-  // Initial load
+  const reloadMessages = () => {
+    const msgs = getMessagesForConversation(conversation.id);
+    setMessages(msgs);
+  };
+
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setMessages([]);
-    setReceipts({});
-
-    (async () => {
-      const mems = conversation.members.map((m) => m.profile).filter(Boolean) as Profile[];
-      setMembers(mems);
-      const raw = await fetchMessages(conversation.id);
-      if (cancelled) return;
-      const decrypted = await decryptMessages(conversation.id, conversation.is_group, mems, raw);
-      if (cancelled) return;
-      setMessages(decrypted);
-      setLoading(false);
-
-      // Mark delivered + read
-      await markReceipts(conversation.id, 'delivered');
-      await markReceipts(conversation.id, 'read');
-      await updateLastRead(conversation.id);
-
-      // Load receipts for these messages
-      await loadReceipts(decrypted);
-    })();
-
-    return () => { cancelled = true; };
+    reloadMessages();
+    markConversationRead(conversation.id);
+    onNewMessage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversation.id]);
 
-  // Scroll to bottom on new messages
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
-
-  // Realtime: new messages
-  useEffect(() => {
-    const channel = supabase
-      .channel(`messages:${conversation.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversation.id}` },
-        async (payload) => {
-          const newMsg = payload.new as Message;
-          // Fetch sender profile
-          const { data: sender } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', newMsg.sender_id)
-            .maybeSingle();
-          const enriched: Message = { ...newMsg, sender: sender as Profile | undefined };
-          const decrypted = await decryptMessages(conversation.id, conversation.is_group, members, [enriched]);
-          setMessages((prev) => [...prev, decrypted[0]]);
-          if (newMsg.sender_id !== profile?.id) {
-            await markReceipts(conversation.id, 'delivered');
-            await markReceipts(conversation.id, 'read');
-            await updateLastRead(conversation.id);
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversation.id}` },
-        (payload) => {
-          const deleted = payload.old as Message;
-          setMessages((prev) => prev.filter((m) => m.id !== deleted.id));
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversation.id, members, profile?.id]);
-
-  // Realtime: presence for other members
-  useEffect(() => {
-    const otherIds = conversation.members
-      .filter((m) => m.user_id !== profile?.id)
-      .map((m) => m.user_id);
-    if (otherIds.length === 0) return;
-
-    const init: PresenceMap = {};
-    otherIds.forEach((id) => {
-      const m = conversation.members.find((mm) => mm.user_id === id);
-      if (m?.profile) init[id] = { is_online: m.profile.is_online, last_seen: m.profile.last_seen };
+    requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     });
-    setPresence(init);
+  }, [messages.length, conversation.id]);
 
-    const channel = supabase
-      .channel(`presence:${conversation.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=in.(${otherIds.join(',')})` },
-        (payload) => {
-          const p = payload.new as Profile;
-          setPresence((prev) => ({
-            ...prev,
-            [p.id]: { is_online: p.is_online, last_seen: p.last_seen },
-          }));
-        }
-      )
-      .subscribe();
+  const handleSent = (msg: LocalMessage) => {
+    setMessages((prev) => [...prev, msg]);
+    onNewMessage();
+    onChange();
 
-    return () => { supabase.removeChannel(channel); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversation.id, conversation.members.length, profile?.id]);
+    setTimeout(() => {
+      updateMessageStatus(msg.id, 'delivered');
+      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, status: 'delivered' } : m)));
+    }, 450);
+    setTimeout(() => {
+      updateMessageStatus(msg.id, 'read');
+      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, status: 'read' } : m)));
+    }, 1700);
 
-  // Realtime: typing indicator via broadcast
-  useEffect(() => {
-    const channel = supabase.channel(`typing:${conversation.id}`, {
-      config: { broadcast: { self: false } },
-    });
+    if (!autoReplyPendingRef.current && otherProfileId && !conversation.is_group) {
+      autoReplyPendingRef.current = true;
+      setTyping(true);
 
-    channel.on('broadcast', { event: 'typing' }, (payload) => {
-      const { userId, typing: t } = payload.payload as { userId: string; typing: boolean };
-      if (userId !== profile?.id) {
-        setTyping(t);
-        if (t) {
-          window.setTimeout(() => setTyping(false), 3000);
-        }
-      }
-    });
-
-    channel.subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversation.id, profile?.id]);
-
-  // Realtime: receipts
-  useEffect(() => {
-    const channel = supabase
-      .channel(`receipts:${conversation.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'message_receipts' },
-        (payload) => {
-          const row = payload.new as { message_id: string; user_id: string; status: MessageStatus };
-          if (row.user_id !== profile?.id) {
-            setReceipts((prev) => ({
-              ...prev,
-              [row.message_id]: { ...prev[row.message_id], [row.user_id]: row.status },
-            }));
-          }
-        }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversation.id, profile?.id]);
-
-  const loadReceipts = useCallback(async (msgs: Message[]) => {
-    const ids = msgs.map((m) => m.id);
-    if (ids.length === 0) return;
-    const { data } = await supabase
-      .from('message_receipts')
-      .select('message_id, user_id, status')
-      .in('message_id', ids);
-    if (!data) return;
-    const map: ReceiptMap = {};
-    for (const r of data) {
-      if (!map[r.message_id]) map[r.message_id] = {};
-      map[r.message_id][r.user_id] = r.status as MessageStatus;
-    }
-    setReceipts(map);
-  }, []);
-
-  const sendTyping = (t: boolean) => {
-    const channel = supabase.channel(`typing:${conversation.id}`);
-    channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        channel.send({
-          type: 'broadcast',
-          event: 'typing',
-          payload: { userId: profile?.id, typing: t },
+      scheduleAutoReply(conversation.id, otherProfileId).then((replyMsg) => {
+        setTyping(false);
+        autoReplyPendingRef.current = false;
+        setMessages((prev) => {
+          const exists = prev.some((m) => m.id === replyMsg.id);
+          if (exists) return prev;
+          return [...prev, replyMsg];
         });
-      }
-    });
-  };
-
-  const handleSent = (m: Message) => {
-    setMessages((prev) => [...prev, m]);
-  };
-
-  const handleDelete = async (m: Message) => {
-    try {
-      await deleteMessage(m.id);
-      setMessages((prev) => prev.filter((x) => x.id !== m.id));
-    } catch (err) {
-      console.error('delete error:', err);
+        onNewMessage();
+        onChange();
+      });
     }
   };
 
-  // Compute the receipt status to display for an outgoing message:
-  // read if any recipient marked read; else delivered if any marked delivered;
-  // else sent.
-  const receiptStatusFor = (msg: Message): MessageStatus | undefined => {
-    if (msg.sender_id !== profile?.id) return undefined;
-    const r = receipts[msg.id];
-    if (!r) return 'sent';
-    const statuses = Object.values(r);
-    if (statuses.some((s) => s === 'read')) return 'read';
-    if (statuses.some((s) => s === 'delivered')) return 'delivered';
-    return 'sent';
+  const handleDelete = (m: LocalMessage) => {
+    deleteMessage(m.id);
+    setMessages((prev) => prev.filter((x) => x.id !== m.id));
+    onNewMessage();
+    onChange();
   };
 
-  const otherProfile = conversation.members.find((m) => m.user_id !== profile?.id)?.profile;
-  const otherPresence = otherProfile ? presence[otherProfile.id] : undefined;
+  const handleSendText = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const msg = storeSendMessage(conversation.id, trimmed, replyTo?.id ?? null);
+    setReplyTo(null);
+    handleSent(msg);
+  };
+
+  const handleSendImage = (url: string, caption?: string) => {
+    const msg = storeSendImage(conversation.id, url, caption || '');
+    handleSent(msg);
+  };
+
+  const handleSendVoice = (v: VoiceNote) => {
+    const msg = storeSendVoice(conversation.id, v);
+    handleSent(msg);
+  };
+
+  const handleSendPoll = (p: PollData) => {
+    const msg = storeSendPoll(conversation.id, p);
+    handleSent(msg);
+  };
+
+  const handleBubbleChange = () => {
+    reloadMessages();
+    onChange();
+  };
+
   const presenceText = conversation.is_group
-    ? `${conversation.members.length} members`
-    : otherPresence
-      ? otherPresence.is_online
-        ? 'online'
-        : formatLastSeen({ ...otherProfile!, is_online: otherPresence.is_online, last_seen: otherPresence.last_seen })
-      : formatLastSeen(otherProfile);
+    ? `${conversation.member_ids.length} members`
+    : otherProfile
+      ? formatLastSeen(otherProfile as any)
+      : '';
+
+  const isDark = theme === 'dark';
 
   return (
     <div className="flex flex-col h-full wa-chat-bg">
       <ChatHeader
         conversation={conversation}
         onBack={onBack}
-        onInfo={onInfo}
         presenceText={presenceText}
         typing={typing}
+        theme={theme}
+        onCall={onCall}
       />
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto py-3">
-        {loading ? (
-          <div className="flex items-center justify-center h-full text-[#667781] text-sm">
-            Loading messages…
-          </div>
-        ) : messages.length === 0 ? (
+      <div ref={scrollRef} className="flex-1 overflow-y-auto py-3 px-2 md:px-6">
+        {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full px-6 text-center">
-            <div className="bg-[#fff6d1] text-[#54462a] text-xs px-3 py-2 rounded-lg shadow-sm max-w-xs">
-              Messages are end-to-end encrypted. No one outside of this chat can read them.
+            <div className="glass-card px-5 py-3 rounded-2xl max-w-sm animate-pop">
+              <p className={`text-sm ${isDark ? 'text-white/70' : 'text-slate-600'}`}>
+                Messages are end-to-end encrypted. No one outside of this chat can read them.
+              </p>
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 max-w-4xl mx-auto">
             {messages.map((m, i) => {
               const prev = messages[i - 1];
-              const next = messages[i + 1];
               const showDateSep = !prev || !sameDay(prev.created_at, m.created_at);
-              const showName = conversation.is_group && m.sender_id !== profile?.id && (!prev || prev.sender_id !== m.sender_id);
-              const showAvatar = conversation.is_group && m.sender_id !== profile?.id && (!next || next.sender_id !== m.sender_id);
-              const sender = m.sender ?? members.find((mem) => mem.id === m.sender_id);
               const replyToMsg = m.reply_to ? messages.find((x) => x.id === m.reply_to) : null;
+              const out = m.sender_id === me.id;
+              const senderProfile = m.sender_id === me.id ? undefined : getProfile(m.sender_id);
+              const showAvatar =
+                conversation.is_group && !out &&
+                  (i === messages.length - 1 || messages[i + 1]?.sender_id !== m.sender_id);
+              const showName = conversation.is_group && !out &&
+                (!prev || prev.sender_id !== m.sender_id);
               return (
                 <div key={m.id}>
                   {showDateSep && (
-                    <div className="flex justify-center my-3">
-                      <span className="bg-[#fff6d1] text-[#54462a] text-xs px-3 py-1 rounded-lg shadow-sm">
+                    <div className="flex justify-center my-4">
+                      <span className="glass-card px-3.5 py-1.5 rounded-xl text-xs font-medium shadow-sm">
                         {formatDateSeparator(m.created_at)}
                       </span>
                     </div>
                   )}
                   <MessageBubble
                     message={m}
-                    out={m.sender_id === profile?.id}
-                    showAvatar={showAvatar}
+                    out={out}
+                    showAvatar={!!showAvatar}
                     showName={showName}
                     isGroup={conversation.is_group}
-                    sender={sender}
-                    replyTo={replyToMsg}
-                    receiptsStatus={receiptStatusFor(m)}
+                    sender={senderProfile}
+                    replyTo={replyToMsg ?? null}
+                    receiptsStatus={m.status as MessageStatus | undefined}
                     onReply={setReplyTo}
-                    onDelete={m.sender_id === profile?.id ? handleDelete : undefined}
+                    onDelete={out ? handleDelete : undefined}
+                    theme={theme}
+                    onChange={handleBubbleChange}
                   />
                 </div>
               );
             })}
             {typing && (
-              <div className="flex px-3 py-1">
-                <div className="bubble-in rounded-lg px-3 py-2 shadow-sm ml-1">
-                  <div className="flex gap-1">
-                    <span className="typing-dot w-1.5 h-1.5 rounded-full bg-[#667781]" />
-                    <span className="typing-dot w-1.5 h-1.5 rounded-full bg-[#667781]" />
-                    <span className="typing-dot w-1.5 h-1.5 rounded-full bg-[#667781]" />
+              <div className="flex px-3 py-1.5 animate-msg-in">
+                <div className="rounded-2xl px-4 py-2.5 shadow-sm ml-1 glass-bubble-in">
+                  <div className="flex gap-1 items-center h-5">
+                    <span className="typing-dot w-1.5 h-1.5 rounded-full" />
+                    <span className="typing-dot w-1.5 h-1.5 rounded-full" />
+                    <span className="typing-dot w-1.5 h-1.5 rounded-full" />
                   </div>
                 </div>
               </div>
@@ -324,11 +223,18 @@ export function ConversationView({ conversation, onBack, onInfo }: ConversationV
       </div>
 
       <MessageInput
-        conversationId={conversation.id}
-        replyTo={replyTo}
+        onSendText={handleSendText}
+        onSendImage={handleSendImage}
+        onSendVoice={handleSendVoice}
+        onSendPoll={handleSendPoll}
+        replyTo={replyTo ? {
+          id: replyTo.id,
+          sender_id: replyTo.sender_id,
+          body: replyTo.body ?? '',
+          type: replyTo.type,
+        } : null}
         onReplyClear={() => setReplyTo(null)}
-        onSent={handleSent}
-        onTyping={sendTyping}
+        theme={theme}
       />
     </div>
   );
