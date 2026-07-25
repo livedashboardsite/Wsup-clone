@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  ArrowLeft, MoreVertical, Phone, Video, Search,
+  ArrowLeft, MoreVertical, Phone, Video, Search, Info,
 } from 'lucide-react';
 import { Avatar } from './Avatar';
 import {
@@ -16,13 +16,18 @@ interface ChatHeaderProps {
   typing: boolean;
   theme: Theme;
   onCall: (kind: 'voice' | 'video') => void;
+  onReloadShowcase: () => void;
 }
 
-export function ChatHeader({ conversation, onBack, presenceText, typing, theme, onCall }: ChatHeaderProps) {
+export function ChatHeader({ conversation, onBack, presenceText, typing, theme, onCall, onReloadShowcase }: ChatHeaderProps) {
   const me = getCurrentUser();
   const [menuOpen, setMenuOpen] = useState(false);
   const otherId = conversation.member_ids.find((m) => m !== me.id);
   const other = otherId ? getProfile(otherId) : undefined;
+
+  const handleInfoClick = useCallback(() => {
+    onReloadShowcase();
+  }, [onReloadShowcase]);
 
   const name = conversation.is_group ? conversation.name ?? 'Group' : other?.name ?? 'Unknown';
   const avatarSrc = conversation.is_group ? conversation.avatar_url : other?.avatar_url;
@@ -52,10 +57,12 @@ export function ChatHeader({ conversation, onBack, presenceText, typing, theme, 
     : [];
 
   return (
-    <div className={`${themeBg} backdrop-blur-xl px-3 py-2 flex items-center gap-3 shrink-0 border-b ${themeBorder}`}>
+    <div className={`px-3 py-2 flex items-center gap-3 shrink-0 border-b ${themeBorder} mist-nav-bg backdrop-blur-2xl`} style={{ WebkitBackdropFilter: 'blur(20px) saturate(180%)' }}>
       <button
         onClick={onBack}
-        className={`md:hidden w-9 h-9 rounded-full flex items-center justify-center ${themeIconColor} ${themeHover}`}
+        className={`md:hidden spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95
+          ${isDark ? 'text-white/70 hover:text-white hover:bg-white/10' : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'}`}
+        aria-label="Back to chat list"
       >
         <ArrowLeft size={20} />
       </button>
@@ -92,40 +99,63 @@ export function ChatHeader({ conversation, onBack, presenceText, typing, theme, 
       </div>
       <div className={`flex items-center gap-1 ${themeIconColor}`}>
         <button
+          onClick={handleInfoClick}
+          className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95
+            ${isDark ? 'hover:text-white hover:bg-white/10' : 'hover:text-slate-900 hover:bg-white/80'}`}
+          title="Showcase / Info"
+          aria-label="Showcase and info"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleInfoClick();
+            }
+          }}
+        >
+          <Info size={19} strokeWidth={2} />
+        </button>
+        <button
           onClick={() => onCall('video')}
-          className={`w-9 h-9 rounded-full flex items-center justify-center ${themeHover} spring-hover`}
+          className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 ${themeHover}`}
           title="Video call"
+          aria-label="Start video call"
         >
           <Video size={20} />
         </button>
         <button
           onClick={() => onCall('voice')}
-          className={`w-9 h-9 rounded-full flex items-center justify-center ${themeHover} spring-hover`}
+          className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 ${themeHover}`}
           title="Voice call"
+          aria-label="Start voice call"
         >
           <Phone size={18} />
         </button>
-        <button className={`w-9 h-9 rounded-full flex items-center justify-center ${themeHover}`} title="Search">
+        <button
+          className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 ${themeHover}`}
+          title="Search in chat"
+          aria-label="Search in conversation"
+        >
           <Search size={18} />
         </button>
         <div className="relative">
           <button
             onClick={() => setMenuOpen((v) => !v)}
-            className={`w-9 h-9 rounded-full flex items-center justify-center ${themeHover}`}
+            className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 ${themeHover}`}
+            aria-label="Conversation options"
           >
-            <MoreVertical size={20} />
+            <MoreVertical size={19} />
           </button>
           {menuOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-              <div className={`absolute right-0 top-full mt-1 ${themeMenuBg} backdrop-blur-xl rounded-md shadow-lg border ${themeBorder} py-1 min-w-[160px] z-20 animate-pop`}>
-                <button onClick={() => setMenuOpen(false)} className={`w-full text-left text-sm px-4 py-2 ${menuItemHover} ${themeTextPrimary}`}>
+              <div className={`absolute right-0 top-full mt-1 rounded-xl shadow-lg z-20 py-1 min-w-[180px] animate-pop mist-menu-bg border ${themeBorder}`}>
+                <button onClick={() => setMenuOpen(false)} className={`w-full text-left text-sm px-4 py-2.5 ${menuItemHover} ${themeTextPrimary}`}>
                   Contact info
                 </button>
-                <button onClick={() => setMenuOpen(false)} className={`w-full text-left text-sm px-4 py-2 ${menuItemHover} ${themeTextPrimary}`}>
+                <button onClick={() => setMenuOpen(false)} className={`w-full text-left text-sm px-4 py-2.5 ${menuItemHover} ${themeTextPrimary}`}>
                   Select messages
                 </button>
-                <button onClick={() => setMenuOpen(false)} className={`w-full text-left text-sm px-4 py-2 ${menuItemHover} ${themeTextPrimary}`}>
+                <button onClick={() => setMenuOpen(false)} className={`w-full text-left text-sm px-4 py-2.5 ${menuItemHover} ${themeTextPrimary}`}>
                   Mute notifications
                 </button>
               </div>

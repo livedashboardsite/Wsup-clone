@@ -32,10 +32,11 @@ interface ConversationViewProps {
   onNewMessage: () => void;
   onChange: () => void;
   onCall: (kind: 'voice' | 'video') => void;
+  onReloadShowcase: () => void;
 }
 
 export function ConversationView({
-  conversation, onBack, theme, onNewMessage, onChange, onCall,
+  conversation, onBack, theme, onNewMessage, onChange, onCall, onReloadShowcase,
 }: ConversationViewProps) {
   const me = getCurrentUser();
   const otherProfileId = useMemo(
@@ -156,6 +157,7 @@ export function ConversationView({
         typing={typing}
         theme={theme}
         onCall={onCall}
+        onReloadShowcase={onReloadShowcase}
       />
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-3 px-2 md:px-6">

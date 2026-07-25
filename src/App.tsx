@@ -53,6 +53,7 @@ function AppInner() {
   });
   const [theme, setThemeState] = useState<Theme>(() => getTheme());
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showcaseKey, setShowcaseKey] = useState(0);
 
   // Call modal state
   const [callOpen, setCallOpen] = useState(false);
@@ -64,6 +65,13 @@ function AppInner() {
   const [statusOpenId, setStatusOpenId] = useState<string | null>(null);
 
   const bumpRefresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+
+  const handleReloadShowcase = useCallback(() => {
+    setActiveId(null);
+    setHashActive(null);
+    setShowcaseKey((k) => k + 1);
+    bumpRefresh();
+  }, [bumpRefresh]);
 
   useEffect(() => {
     seedIfNeeded();
@@ -178,6 +186,7 @@ function AppInner() {
           onResetData={handleResetData}
           refreshKey={refreshKey}
           onOpenStatus={handleOpenStatus}
+          onReloadShowcase={handleReloadShowcase}
         />
       </div>
 
@@ -194,13 +203,16 @@ function AppInner() {
             onNewMessage={bumpRefresh}
             onChange={bumpRefresh}
             onCall={(kind) => handleCall(active, kind)}
+            onReloadShowcase={handleReloadShowcase}
           />
         ) : (
           <Showcase
+            key={showcaseKey}
             theme={theme}
             onToggleTheme={toggleTheme}
             onTryDemoChat={handleTryDemoChat}
             onViewCode={handleViewCode}
+            onReloadShowcase={handleReloadShowcase}
           />
         )}
       </div>

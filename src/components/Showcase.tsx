@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   MessageSquare, Bot, Mic, BarChart3, Video, Palette,
   Phone, Play, Shield, Zap, ChevronRight, ArrowRight, Sparkles,
-  Sun, Moon, Github,
+  Sun, Moon, Github, Info,
 } from 'lucide-react';
 import type { Theme } from '@/lib/localStore';
 
@@ -11,6 +11,7 @@ interface ShowcaseProps {
   onToggleTheme: () => void;
   onTryDemoChat: () => void;
   onViewCode: () => void;
+  onReloadShowcase?: () => void;
 }
 
 const FEATURES = [
@@ -52,12 +53,78 @@ const FEATURES = [
   },
 ];
 
-export function Showcase({ theme, onToggleTheme, onTryDemoChat, onViewCode }: ShowcaseProps) {
+export function Showcase({ theme, onToggleTheme, onTryDemoChat, onViewCode, onReloadShowcase }: ShowcaseProps) {
   const isDark = theme === 'dark';
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
+  const handleInfoClick = useCallback(() => {
+    if (onReloadShowcase) {
+      onReloadShowcase();
+    }
+  }, [onReloadShowcase]);
+
   return (
-    <div className="h-full w-full overflow-y-auto px-6 md:px-12 py-10 animate-fade-up">
+    <div className="h-full w-full overflow-y-auto animate-fade-up">
+      {/* Top navigation bar */}
+      <div className={`sticky top-0 z-30 px-4 md:px-8 py-3 mist-nav-bg backdrop-blur-2xl border-b ${isDark ? 'border-white/[0.06]' : 'border-white/60'}`} style={{ WebkitBackdropFilter: 'blur(20px) saturate(180%)' }}>
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+              <MessageSquare size={16} className="text-white" />
+            </div>
+            <span className={`text-sm font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              WA · Next‑Gen Glass
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleInfoClick}
+              className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95
+                ${isDark
+                  ? 'text-white/70 hover:text-white hover:bg-white/10'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
+                }`}
+              title="Reload showcase"
+              aria-label="Reload showcase and info page"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleInfoClick();
+                }
+              }}
+            >
+              <Info size={19} strokeWidth={2} />
+            </button>
+            <button
+              onClick={onToggleTheme}
+              className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95
+                ${isDark
+                  ? 'text-white/70 hover:text-white hover:bg-white/10'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
+                }`}
+              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label={isDark ? 'Switch to light glass mode' : 'Switch to dark glass mode'}
+            >
+              {isDark ? <Sun size={19} /> : <Moon size={19} />}
+            </button>
+            <button
+              onClick={onViewCode}
+              className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95
+                ${isDark
+                  ? 'text-white/70 hover:text-white hover:bg-white/10'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
+                }`}
+              title="View source code"
+              aria-label="View source code on GitHub"
+            >
+              <Github size={19} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-6 md:px-12 py-10">
       <div className="max-w-6xl mx-auto">
         {/* Hero */}
         <div className="glass-card p-8 md:p-10 md:mb-8 animate-pop">
@@ -291,6 +358,7 @@ export function Showcase({ theme, onToggleTheme, onTryDemoChat, onViewCode }: Sh
             <ChevronRight size={16} />
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

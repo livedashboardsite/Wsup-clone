@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import {
   Search,
   MessageSquarePlus,
@@ -14,6 +14,8 @@ import {
   CircleUser,
   Circle,
   Radio,
+  Info,
+  ArrowLeft,
 } from 'lucide-react';
 import { Avatar } from './Avatar';
 import { Ticks } from './Ticks';
@@ -44,6 +46,7 @@ interface ChatListProps {
   onResetData: () => void;
   refreshKey: number;
   onOpenStatus: (statusId: string) => void;
+  onReloadShowcase: () => void;
 }
 
 const TABS: { id: SidebarTab; label: string; icon: typeof MessageCircle; badge?: string }[] = [
@@ -119,16 +122,25 @@ export function ChatList({
   onResetData,
   refreshKey,
   onOpenStatus,
+  onReloadShowcase,
 }: ChatListProps) {
   const me = getCurrentUser();
   const [query, setQuery] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [tab, setTab] = useState<SidebarTab>(() => getActiveTab());
 
-  const setTabAndSave = (t: SidebarTab) => {
+  const setTabAndSave = useCallback((t: SidebarTab) => {
     setTab(t);
     saveActiveTab(t);
-  };
+  }, []);
+
+  const handleBackToChats = useCallback(() => {
+    setTabAndSave('all');
+  }, [setTabAndSave]);
+
+  const handleInfoClick = useCallback(() => {
+    onReloadShowcase();
+  }, [onReloadShowcase]);
 
   const profiles = useMemo(() => getProfiles(), [refreshKey]);
   const statuses = useMemo(
@@ -194,37 +206,83 @@ export function ChatList({
     });
     return (
       <div className={`flex flex-col h-full glass-strong rounded-r-[28px] ${themeBg}`}>
-        <div className={`${themeHeaderBg} px-4 py-2.5 flex items-center justify-between shrink-0 border-b ${themeBorder}`}>
-          <h1 className={`text-lg font-semibold ${themeTextPrimary}`}>Status</h1>
+        <div className={`px-4 py-2.5 flex items-center justify-between shrink-0 border-b ${themeBorder} mist-nav-bg`}>
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <button
+              onClick={handleBackToChats}
+              className={`spring-hover inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold shadow-sm transition-all
+                ${isDark
+                  ? 'bg-white/10 hover:bg-white/15 text-white border border-white/15 backdrop-blur-xl'
+                  : 'bg-white/85 hover:bg-white text-slate-900 border border-white/70 backdrop-blur-xl'
+                }`}
+              style={{ WebkitBackdropFilter: 'blur(20px) saturate(180%)' }}
+              title="Back to chats"
+              aria-label="Back to chats"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleBackToChats();
+                }
+              }}
+            >
+              <ArrowLeft size={16} strokeWidth={2.25} />
+              <span className="hidden sm:inline">Back to Chats</span>
+              <MessageCircle size={15} className="hidden sm:inline" />
+            </button>
+            <h1 className={`text-lg font-semibold ${themeTextPrimary} truncate ml-1`}>Status</h1>
+          </div>
           <div className="flex items-center gap-1">
             <button
-              onClick={onToggleTheme}
-              className={`w-9 h-9 rounded-full flex items-center justify-center ${themeTextSecondary} ${themeHover}`}
-              title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+              onClick={handleInfoClick}
+              className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200
+                ${isDark
+                  ? 'text-white/70 hover:text-white hover:bg-white/10 active:scale-95'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/80 active:scale-95'
+                }`}
+              title="Showcase / Info"
+              aria-label="Showcase and info"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleInfoClick();
+                }
+              }}
             >
-              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+              <Info size={19} strokeWidth={2} />
             </button>
             <button
-              onClick={() => setTabAndSave('all')}
-              className={`w-9 h-9 rounded-full flex items-center justify-center ${themeTextSecondary} ${themeHover}`}
-              title="Back to chats"
+              onClick={onToggleTheme}
+              className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200
+                ${isDark
+                  ? 'text-white/70 hover:text-white hover:bg-white/10 active:scale-95'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/80 active:scale-95'
+                }`}
+              title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             >
-              <MessageCircle size={20} />
+              {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
             </button>
             <div className="relative">
               <button
                 onClick={() => setMenuOpen((v) => !v)}
-                className={`w-9 h-9 rounded-full flex items-center justify-center ${themeTextSecondary} ${themeHover}`}
+                className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200
+                  ${isDark
+                    ? 'text-white/70 hover:text-white hover:bg-white/10 active:scale-95'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/80 active:scale-95'
+                  }`}
+                aria-label="More options"
               >
-                <MoreVertical size={20} />
+                <MoreVertical size={19} />
               </button>
               {menuOpen && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                  <div className={`absolute right-0 top-full mt-1 rounded-lg shadow-lg z-20 glass-strong min-w-[180px] py-1`}>
+                  <div className={`absolute right-0 top-full mt-1 rounded-xl shadow-lg z-20 py-1 min-w-[180px] mist-menu-bg border ${themeBorder}`}>
                     <button
                       onClick={() => { setMenuOpen(false); onResetData(); }}
-                      className={`w-full text-left text-sm px-4 py-2 ${themeHover} flex items-center gap-2 ${isDark ? 'text-[#f97676]' : 'text-[#d93025]'}`}
+                      className={`w-full text-left text-sm px-4 py-2.5 ${themeHover} flex items-center gap-2 ${isDark ? 'text-[#f97676]' : 'text-[#d93025]'}`}
                     >
                       <Trash2 size={14} /> Reset chat history
                     </button>
@@ -293,58 +351,102 @@ export function ChatList({
 
   return (
     <div className={`flex flex-col h-full glass-strong rounded-r-[28px] ${themeBg}`}>
-      <div className={`${themeHeaderBg} px-4 py-2.5 flex items-center justify-between shrink-0 border-b ${themeBorder}`}>
+      <div className={`px-4 py-2.5 flex items-center justify-between shrink-0 border-b ${themeBorder} mist-nav-bg`}>
         <h1 className={`text-lg font-semibold ${themeTextPrimary}`}>Chats</h1>
         <div className="flex items-center gap-1">
           <button
-            onClick={onToggleTheme}
-            className={`w-9 h-9 rounded-full flex items-center justify-center ${themeTextSecondary} ${themeHover} transition-colors`}
-            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            onClick={handleInfoClick}
+            className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200
+              ${isDark
+                ? 'text-white/70 hover:text-white hover:bg-white/10 active:scale-95'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/80 active:scale-95'
+              }`}
+            title="Showcase / Info"
+            aria-label="Showcase and info"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleInfoClick();
+              }
+            }}
           >
-            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            <Info size={19} strokeWidth={2} />
+          </button>
+          <button
+            onClick={onToggleTheme}
+            className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200
+              ${isDark
+                ? 'text-white/70 hover:text-white hover:bg-white/10 active:scale-95'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/80 active:scale-95'
+              }`}
+            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
           </button>
           <button
             onClick={() => onOpenStatus(statuses[0]?.id)}
-            className={`w-9 h-9 rounded-full flex items-center justify-center ${themeTextSecondary} ${themeHover} transition-colors relative`}
+            className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 relative
+              ${isDark
+                ? 'text-white/70 hover:text-white hover:bg-white/10 active:scale-95'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/80 active:scale-95'
+              }`}
             title="Status / Stories"
+            aria-label="Open status stories"
           >
-            <Radio size={20} />
+            <Radio size={19} />
             {unviewedCount() > 0 && (
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white" />
             )}
           </button>
           <button
-            className={`w-9 h-9 rounded-full flex items-center justify-center ${themeTextSecondary} ${themeHover} transition-colors`}
+            className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200
+              ${isDark
+                ? 'text-white/70 hover:text-white hover:bg-white/10 active:scale-95'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/80 active:scale-95'
+              }`}
             title="New group"
+            aria-label="Start new group chat"
           >
-            <Users size={20} />
+            <Users size={19} />
           </button>
           <button
-            className={`w-9 h-9 rounded-full flex items-center justify-center ${themeTextSecondary} ${themeHover} transition-colors`}
+            className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200
+              ${isDark
+                ? 'text-white/70 hover:text-white hover:bg-white/10 active:scale-95'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/80 active:scale-95'
+              }`}
             title="New chat"
+            aria-label="Start new chat"
           >
-            <MessageSquarePlus size={20} />
+            <MessageSquarePlus size={19} />
           </button>
           <div className="relative">
             <button
               onClick={() => setMenuOpen((v) => !v)}
-              className={`w-9 h-9 rounded-full flex items-center justify-center ${themeTextSecondary} ${themeHover} transition-colors`}
+              className={`spring-hover w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200
+                ${isDark
+                  ? 'text-white/70 hover:text-white hover:bg-white/10 active:scale-95'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/80 active:scale-95'
+                }`}
+              aria-label="More options"
             >
-              <MoreVertical size={20} />
+              <MoreVertical size={19} />
             </button>
             {menuOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                <div className={`absolute right-0 top-full mt-1 rounded-md shadow-lg border ${themeBorder} glass-strong py-1 min-w-[180px] z-20`}>
+                <div className={`absolute right-0 top-full mt-1 rounded-xl shadow-lg z-20 py-1 min-w-[180px] mist-menu-bg border ${themeBorder}`}>
                   <button
                     onClick={() => setMenuOpen(false)}
-                    className={`w-full text-left text-sm px-4 py-2 ${themeHover} flex items-center gap-2 ${themeTextPrimary}`}
+                    className={`w-full text-left text-sm px-4 py-2.5 ${themeHover} flex items-center gap-2 ${themeTextPrimary}`}
                   >
                     <User size={14} /> Profile
                   </button>
                   <button
                     onClick={() => { setMenuOpen(false); onResetData(); }}
-                    className={`w-full text-left text-sm px-4 py-2 ${themeHover} flex items-center gap-2 ${isDark ? 'text-[#f97676]' : 'text-[#d93025]'}`}
+                    className={`w-full text-left text-sm px-4 py-2.5 ${themeHover} flex items-center gap-2 ${isDark ? 'text-[#f97676]' : 'text-[#d93025]'}`}
                   >
                     <Trash2 size={14} /> Reset chat history
                   </button>

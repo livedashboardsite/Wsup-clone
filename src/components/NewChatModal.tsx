@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, Search, Check, ArrowLeft, Users } from 'lucide-react';
 import { Avatar } from './Avatar';
 import { listAllProfiles, createDirectConversation, createGroupConversation } from '@/lib/chat';
@@ -21,6 +21,26 @@ export function NewChatModal({ onClose, onCreated }: NewChatModalProps) {
   const [groupMode, setGroupMode] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [step, setStep] = useState<'pick' | 'name'>('pick');
+  const [closing, setClosing] = useState(false);
+
+  const handleClose = useCallback(() => {
+    setClosing(true);
+    window.setTimeout(() => {
+      setClosing(false);
+      onClose();
+    }, 200);
+  }, [onClose]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', onKey, { passive: false });
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleClose]);
 
   useEffect(() => {
     let active = true;
@@ -72,15 +92,30 @@ export function NewChatModal({ onClose, onCreated }: NewChatModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md flex flex-col max-h-[80vh] animate-slide-up">
+    <div
+      className={`fixed inset-0 z-50 mist-modal-overlay flex items-center justify-center p-4 transition-opacity duration-200 ease-out ${
+        closing ? 'opacity-0' : 'opacity-100 animate-fade-in'
+      }`}
+      role="dialog"
+      aria-modal="true"
+      aria-label="New chat"
+    >
+      <div
+        className={`mist-modal-bg rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[80vh] border transition-all duration-200 ease-out border-white/40 ${
+          closing ? 'scale-95 opacity-0 translate-y-2' : 'scale-100 opacity-100 translate-y-0 animate-slide-up'
+        }`}
+      >
         {step === 'name' ? (
           <>
-            <div className="px-4 py-3 bg-[#008069] text-white flex items-center gap-3 rounded-t-lg">
-              <button onClick={() => setStep('pick')} className="hover:bg-white/10 rounded-full p-1">
+            <div className="px-4 py-3 text-white flex items-center gap-3 rounded-t-2xl" style={{ background: 'linear-gradient(135deg, #008069 0%, #0284c7 100%)' }}>
+              <button
+                onClick={() => setStep('pick')}
+                className="spring-hover hover:bg-white/10 active:scale-95 rounded-full p-1.5 transition-all"
+                aria-label="Back"
+              >
                 <ArrowLeft size={20} />
               </button>
-              <h2 className="text-lg font-medium">New group</h2>
+              <h2 className="text-lg font-semibold">New group</h2>
             </div>
             <div className="p-4 flex-1 overflow-y-auto">
               <div className="flex items-center gap-3 mb-4">
@@ -117,10 +152,24 @@ export function NewChatModal({ onClose, onCreated }: NewChatModalProps) {
           </>
         ) : (
           <>
-            <div className="px-4 py-3 bg-[#008069] text-white flex items-center justify-between rounded-t-lg">
-              <h2 className="text-lg font-medium">{groupMode ? 'Add group members' : 'New chat'}</h2>
-              <button onClick={onClose} className="hover:bg-white/10 rounded-full p-1">
-                <X size={20} />
+            <div
+              className="px-4 py-3 text-white flex items-center justify-between rounded-t-2xl"
+              style={{ background: 'linear-gradient(135deg, #008069 0%, #0284c7 100%)' }}
+            >
+              <h2 className="text-lg font-semibold">{groupMode ? 'Add group members' : 'New chat'}</h2>
+              <button
+                onClick={handleClose}
+                className="spring-hover hover:bg-white/10 active:scale-95 rounded-full p-1.5 transition-all"
+                aria-label="Close"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleClose();
+                  }
+                }}
+              >
+                <X size={20} strokeWidth={2.25} />
               </button>
             </div>
             <div className="p-3">
