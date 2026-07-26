@@ -153,7 +153,7 @@ function AppInner() {
   };
 
   const handleViewCode = () => {
-    window.open('https://github.com', '_blank', 'noopener,noreferrer');
+    window.open('https://github.com/livedashboardsite/Wsup-clone', '_blank', 'noopener,noreferrer');
   };
 
   const conversations: Conversation[] = getConversations();
