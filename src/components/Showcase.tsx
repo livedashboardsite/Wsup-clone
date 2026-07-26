@@ -132,7 +132,7 @@ export function Showcase({ theme, onToggleTheme, onTryDemoChat, onViewCode, onRe
             <div className="flex-1 min-w-0">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-400/30 text-xs font-medium text-emerald-600 dark:text-emerald-300 mb-4">
                 <Sparkles size={14} />
-                <span>Quick Start Guide · Judges Edition</span>
+                <span>Made by Prathamesh Thakur</span>
               </div>
               <h1 className="text-4xl md:text-6xl font-bold leading-tight mb-4">
                 WhatsApp <span className="gradient-text">Next‑Gen Glass Edition</span>
