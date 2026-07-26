@@ -73,7 +73,7 @@ export function Showcase({ theme, onToggleTheme, onTryDemoChat, onViewCode, onRe
               <MessageSquare size={16} className="text-white" />
             </div>
             <span className={`text-sm font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              WA · Next‑Gen Glass
+            Made by Prathamesh Thakur · Vedam School Of Technology Bootcamp · Mentored by Gunjan Ma'am
             </span>
           </div>
           <div className="flex items-center gap-1">
@@ -132,7 +132,7 @@ export function Showcase({ theme, onToggleTheme, onTryDemoChat, onViewCode, onRe
             <div className="flex-1 min-w-0">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-400/30 text-xs font-medium text-emerald-600 dark:text-emerald-300 mb-4">
                 <Sparkles size={14} />
-                <span>Made by Prathamesh Thakur</span>
+                <span>Quick Start Guide</span>
               </div>
               <h1 className="text-4xl md:text-6xl font-bold leading-tight mb-4">
                 WhatsApp <span className="gradient-text">Next‑Gen Glass Edition</span>
